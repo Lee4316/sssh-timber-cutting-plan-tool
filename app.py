@@ -1,116 +1,118 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from collections import Counter
 
 # 設定網頁標題與配置
-st.set_page_config(page_title="建築模型材料裁切規劃器", layout="centered")
+st.set_page_config(page_title="建築模型材料裁切規劃小工具", layout="centered")
 
 # =========================================================
-# 🎨 【萬用全域 CSS 注入】
-# 1. 徹底消滅所有圖表旁邊或下方的 "字" 方框、輔助說明與替代文字小按鈕
-# 2. 將統計數據卡片 (st.metric) 的字體縮小至最適合手機觀看的 1.5rem
+# 【視覺美化與字體縮小修復】全網頁通用 CSS 注入
 # =========================================================
-st.markdown(
+st.html(
     """
     <style>
-    /* 暴力隱藏所有 Streamlit 圖表自帶的無障礙與輔助按鈕(不論官方怎麼改名都一律隱藏) */
-    button[aria-label*="chart" i], 
-    button[aria-label*="string" i],
-    button[data-testid*="Caption" i],
-    .stMainBlockContainer button {
-        display: none !important;
+    /* 1. 強制鎖定所有屬於數量的 number input 的基底包裝容器 */
+    div[data-testid="column"]:nth-of-type(2) [data-baseweb="input"] {
+        background-color: #FFF9E6 !important; /* 溫柔的淺黃色底 */
+        border: 1px solid #FFE0B2 !important;  /* 淡淡的黃橙色邊框 */
     }
-    /* 重新放行正常按鈕，只單純隱藏圖表小圖示 */
-    .stButton button, .stDownloadButton button {
-        display: inline-flex !important;
+    div[data-testid="column"]:nth-of-type(2) input {
+        background-color: #FFF9E6 !important; /* 確保輸入文字區也是黃底 */
+        color: #5D4037 !important;            /* 深咖啡色文字 */
     }
-    
-    /* 統計數據卡片字體縮小修復 */
-    [data-testid="stMetricValue"], .stMetric value {
-        font-size: 1.5rem !important; 
+    /* 當手機聚焦或點擊黃色輸入框時，邊框變為鮮明的橘色 */
+    div[data-testid="column"]:nth-of-type(2) [data-baseweb="input"]:focus-within {
+        border-color: #FFA726 !important;
+        box-shadow: 0 0 0 1px #FFA726 !important;
+    }
+
+    /* 2. 【全新調整】將統計數據卡片 (st.metric) 的字體縮小 */
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem !important; /* 預設大約是 2.5rem，我們將它縮小到 1.5rem，非常適合手機觀看 */
         font-weight: 700 !important;
     }
-    [data-testid="stMetricLabel"], .stMetric label {
-        font-size: 0.9rem !important; 
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important; /* 順便微調標題文字的大小，讓比例更完美 */
+    
+
+    /* 3. 【全新調整】徹底刪除圖表旁邊顯示 "字" 的無障礙輔助按鈕 */
+    button[aria-label="Show chart string content"], 
+    button[data-testid="stImageCaptionButton"] {
+        display: none !important;
+
     }
     </style>
-    """,
-    unsafe_allow_html=True
+    """
 )
 
-st.title("🏗️ 建築模型材料裁切智慧規劃")
-st.write("請在下方表格直接點擊輸入您需要的木條尺寸與數量。")
-st.write("💡 *提示：可直接修改格子內的數字。尺寸可輸入至小數點後一位。*")
+
+st.title("建築模型材料裁切規劃小工具")
+st.write("[for 生活科技課-抗震建築結構單元]")
+st.write("請在下方表格輸入您需要的木條尺寸與數量。")
 
 st.write("---")
 st.subheader("📋 材料需求清單輸入")
+st.write("📐尺寸只能到小數點後一位(若為[斜桿]請將RSAP給你的數值無條件進位到.0或.5)")
+st.write("🔢數量只能是整數")
 
-# =========================================================
-# 📊 【終極防呆防錯表格】使用 st.data_editor
-# 徹底解決原本手機版會跑位、寬度不一與底色失效的問題！
-# =========================================================
-# 預先建立 10 行乾淨的初始資料框架
-default_df = pd.DataFrame(
-    {
-        "📐 尺寸 (cm)": [0.0] * 10,
-        "🔢 數量 (根)": [0] * 10
-    }
-)
-
-# 渲染出一個超級適合手機操作、且防呆性極強的試算表元件
-edited_df = st.data_editor(
-    default_df,
-    num_rows="fixed", # 固定 10 行，不能隨便新增刪除，方便課堂管理
-    use_container_width=True, # 自動完美填滿手機螢幕寬度
-    hide_index=True, # 隱藏最左邊的 0~9 序號，畫面更乾淨
-    column_config={
-        "📐 尺寸 (cm)": st.column_config.NumberColumn(
-            min_value=0.0,
-            max_value=90.0,
-            step=0.1,
-            format="%.1f", # 嚴格資料驗證：限制到小數點後一位
-            required=True,
-        ),
-        "🔢 數量 (根)": st.column_config.NumberColumn(
-            min_value=0,
-            max_value=100,
-            step=1,
-            format="%d", # 嚴格資料驗證：強制必須為整數
-            required=True,
-        ),
-    }
-)
-
-# 篩選出學生真正有輸入（大於0）的有效數據納入計算
+# 建立暫存資料的清單
 input_data = []
-for index, row in edited_df.iterrows():
-    size_val = row["📐 尺寸 (cm)"]
-    qty_val = row["🔢 數量 (根)"]
-    if size_val > 0.0 and qty_val > 0:
-        input_data.append((size_val, qty_val))
 
+# 產生 10 行輸入框
+for i in range(10):
+    # 5.5 : 4.5 的比例既能留出空間給小數點，也能完美塞下單位與強制手機直式並排
+    c1, c2 = st.columns([5.5, 4.5])
+    
+    with c1:
+        # 左側欄位：維持預設灰色底
+        size = st.number_input(
+            f"項目 {i+1} 尺寸 (cm)", 
+            min_value=0.0, 
+            max_value=90.0, 
+            value=0.0, 
+            step=0.1, 
+            format="%.1f", 
+            key=f"size_{i}"
+        )
+    with c2:
+        # 右側欄位：經由上方 st.html 自動強制渲染為淺黃色底
+        qty = st.number_input(
+            f"項目 {i+1} 數量 (根)", 
+            min_value=0, 
+            max_value=100, 
+            value=0, 
+            step=1, 
+            key=f"qty_{i}"
+        )
+    
+    # 只要尺寸與數量都大於 0，才納入計算
+    if size > 0.0 and qty > 0:
+        input_data.append((size, qty))
 
 st.write("---")
 st.subheader("🛠️ 裁切排程結果")
+st.write("同學記得截圖留存在你手機喔~因為接下來幾周你可能會需要再打開來查看!")
 
-# 核心裁切排程計算與繪圖函數
+# 核心裁切排程計算與繪圖函數（支援浮點數尺寸、統計數據功能）
 def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
     if not demands_list:
         st.info("💡 請在上方表格輸入至少一組材料尺寸與數量，系統將自動開始規劃！")
         return False
 
+    # 1. 展開並由大到小排序所有目標尺寸
     all_items = []
-    total_needed_length = 0.0
+    total_needed_length = 0.0  # 統計學生總共需要的木條總長度
     for length, qty in sorted(demands_list, key=lambda x: x, reverse=True):
         all_items.extend([length] * qty)
         total_needed_length += float(length) * qty
         
+    # 2. 初始化 10 根 90cm 的原料木條
     stocks_remain = [float(stock_length)] * max_stocks
     stocks_layout = [[] for _ in range(max_stocks)]
     unplaced_items = []
     
+    # 3. 執行最佳配對裝箱演算法 (Best Fit)
     for item in all_items:
         best_idx = -1
         min_waste = float(stock_length) + 1.0
@@ -128,6 +130,7 @@ def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
         else:
             unplaced_items.append(item)
             
+    # 4. 判斷是否超標
     if unplaced_items:
         unplaced_counts = Counter(unplaced_items)
         def fmt(n): return f"{int(n)}" if n.is_integer() else f"{n:.1f}"
@@ -135,10 +138,10 @@ def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
         st.error(f"材料超標，現在還有 {items_str} 排不進去，請重新修正再送出")
         return False
 
-    # 計算統計數據
-    total_stock_length = float(stock_length * max_stocks)
-    total_leftover = total_stock_length - total_needed_length
-    utilization_rate = (total_needed_length / total_stock_length) * 100
+    # 5. 計算並呈現省料統計數據
+    total_stock_length = float(stock_length * max_stocks)  # 總長 = 90cm * 10 = 900cm
+    total_leftover = total_stock_length - total_needed_length  # 剩餘木條總共剩幾公分
+    utilization_rate = (total_needed_length / total_stock_length) * 100  # 總材料利用率 XX%
     
     metric_col1, metric_col2 = st.columns(2)
     with metric_col1:
@@ -147,22 +150,26 @@ def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
         st.metric(label="📈 總材料利用率高達", value=f"{utilization_rate:.1f} %")
     st.write("") 
 
-    # 繪製裁切圖
+    # 6. 開始繪製裁切圖
     fig, ax = plt.subplots(figsize=(10, 6))
     for i in range(max_stocks):
         y_pos = max_stocks - 1 - i
+        # 繪製 90cm 原始灰色木條
         ax.barh(y_pos, stock_length, left=0, height=0.4, color='#E0E0E0', edgecolor='gray', align='center')
         
         current_left = 0.0
         for segment in stocks_layout[i]:
+            # 繪製各材料區段
             ax.barh(y_pos, segment, left=current_left, height=0.4, color='#F9F9F9', edgecolor='#B0B0B0', align='center')
             
+            # 標註尺寸數字
             mid_point = current_left + segment / 2
             seg_text = f"{int(segment)}" if segment.is_integer() else f"{segment:.1f}"
             ax.text(mid_point, y_pos, seg_text, ha='center', va='center', color='black', fontsize=10, weight='bold')
             
             current_left += segment
             if current_left < stock_length:
+                # 繪製紅色裁切線
                 ax.vlines(current_left, y_pos - 0.25, y_pos + 0.25, colors='red', linestyles='solid', linewidth=1.5)
                 
         ax.text(-2, y_pos, f"木條 {i+1}", ha='right', va='center', fontsize=10, weight='bold')
@@ -180,5 +187,5 @@ def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
     st.pyplot(fig)
     return True
 
-# 執行即時計算
+# 執行即時計算與繪圖
 calculate_and_draw(input_data)
