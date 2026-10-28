@@ -34,6 +34,13 @@ st.html(
     }
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important; /* 順便微調標題文字的大小，讓比例更完美 */
+    
+
+    /* 3. 【全新調整】徹底刪除圖表旁邊顯示 "字" 的無障礙輔助按鈕 */
+    button[aria-label="Show chart string content"], 
+    button[data-testid="stImageCaptionButton"] {
+        display: none !important;
+
     }
     </style>
     """
