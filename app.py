@@ -6,22 +6,39 @@ from collections import Counter
 # 設定網頁標題與配置
 st.set_page_config(page_title="建築模型材料裁切規劃小工具", layout="centered")
 
-# 🎨 【視覺美化】注入網頁樣式 (CSS)
-st.markdown(
+# =========================================================
+# 【視覺美化與字體縮小修復】全網頁通用 CSS 注入
+# =========================================================
+st.html(
     """
     <style>
-    /* 透過 nth-of-type(2) 精準鎖定每行右邊第二個欄位(數量)的背景色 */
-    div[data-testid="column"]:nth-of-type(2) div[data-testid="stNumberInput"] div[data-baseweb="input"] {
+    /* 1. 強制鎖定所有屬於數量的 number input 的基底包裝容器 */
+    div[data-testid="column"]:nth-of-type(2) [data-baseweb="input"] {
         background-color: #FFF9E6 !important; /* 溫柔的淺黃色底 */
-        border-color: #FFE0B2 !important;     /* 淡淡的黃橙色邊框 */
+        border: 1px solid #FFE0B2 !important;  /* 淡淡的黃橙色邊框 */
     }
-    div[data-testid="column"]:nth-of-type(2) div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {
+    div[data-testid="column"]:nth-of-type(2) input {
+        background-color: #FFF9E6 !important; /* 確保輸入文字區也是黃底 */
+        color: #5D4037 !important;            /* 深咖啡色文字 */
+    }
+    /* 當手機聚焦或點擊黃色輸入框時，邊框變為鮮明的橘色 */
+    div[data-testid="column"]:nth-of-type(2) [data-baseweb="input"]:focus-within {
         border-color: #FFA726 !important;
+        box-shadow: 0 0 0 1px #FFA726 !important;
+    }
+
+    /* 2. 【全新調整】將統計數據卡片 (st.metric) 的字體縮小 */
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem !important; /* 預設大約是 2.5rem，我們將它縮小到 1.5rem，非常適合手機觀看 */
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important; /* 順便微調標題文字的大小，讓比例更完美 */
     }
     </style>
-    """,
-    unsafe_allow_html=True
+    """
 )
+
 
 st.title("建築模型材料裁切規劃小工具")
 st.write("[for 生活科技課-抗震建築結構單元]")
@@ -29,17 +46,19 @@ st.write("請在下方表格輸入您需要的木條尺寸與數量。")
 
 st.write("---")
 st.subheader("📋 材料需求清單輸入")
-st.write("尺寸只能到小數點後一位(若為[斜桿]請將RSAP給你的數值無條件進位到.0或.5)")
-st.write("數量只能是整數")
+st.write("📐尺寸只能到小數點後一位(若為[斜桿]請將RSAP給你的數值無條件進位到.0或.5)")
+st.write("🔢數量只能是整數")
 
 # 建立暫存資料的清單
 input_data = []
 
 # 產生 10 行輸入框
 for i in range(10):
+    # 5.5 : 4.5 的比例既能留出空間給小數點，也能完美塞下單位與強制手機直式並排
     c1, c2 = st.columns([5.5, 4.5])
     
     with c1:
+        # 左側欄位：維持預設灰色底
         size = st.number_input(
             f"項目 {i+1} 尺寸 (cm)", 
             min_value=0.0, 
@@ -50,6 +69,7 @@ for i in range(10):
             key=f"size_{i}"
         )
     with c2:
+        # 右側欄位：經由上方 st.html 自動強制渲染為淺黃色底
         qty = st.number_input(
             f"項目 {i+1} 數量 (根)", 
             min_value=0, 
@@ -59,6 +79,7 @@ for i in range(10):
             key=f"qty_{i}"
         )
     
+    # 只要尺寸與數量都大於 0，才納入計算
     if size > 0.0 and qty > 0:
         input_data.append((size, qty))
 
@@ -66,7 +87,7 @@ st.write("---")
 st.subheader("🛠️ 裁切排程結果")
 st.write("同學記得截圖留存在你手機喔~因為接下來幾周你可能會需要再打開來查看!")
 
-# 核心裁切排程計算與繪圖函數（支援浮點數尺寸、新增統計數據功能）
+# 核心裁切排程計算與繪圖函數（支援浮點數尺寸、統計數據功能）
 def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
     if not demands_list:
         st.info("💡 請在上方表格輸入至少一組材料尺寸與數量，系統將自動開始規劃！")
@@ -110,23 +131,19 @@ def calculate_and_draw(demands_list, stock_length=90, max_stocks=10):
         st.error(f"材料超標，現在還有 {items_str} 排不進去，請重新修正再送出")
         return False
 
-    # =========================================================
-    # 【新增功能】計算並呈現環保與省料統計數據
-    # =========================================================
-    total_stock_length = float(stock_length * max_stocks)  # 總材料供應長度 = 90cm * 10 = 900cm
+    # 5. 計算並呈現省料統計數據
+    total_stock_length = float(stock_length * max_stocks)  # 總長 = 90cm * 10 = 900cm
     total_leftover = total_stock_length - total_needed_length  # 剩餘木條總共剩幾公分
     utilization_rate = (total_needed_length / total_stock_length) * 100  # 總材料利用率 XX%
     
-    # 使用 Streamlit 的 columns 做出漂亮的雙數據卡片
     metric_col1, metric_col2 = st.columns(2)
     with metric_col1:
         st.metric(label="♻️ 剩餘木條總共剩", value=f"{total_leftover:.1f} 公分")
     with metric_col2:
         st.metric(label="📈 總材料利用率高達", value=f"{utilization_rate:.1f} %")
-    st.write("") # 留一點空白
-    # =========================================================
+    st.write("") 
 
-    # 5. 未超標，開始繪製裁切圖
+    # 6. 開始繪製裁切圖
     fig, ax = plt.subplots(figsize=(10, 6))
     for i in range(max_stocks):
         y_pos = max_stocks - 1 - i
